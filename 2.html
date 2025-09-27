@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>十一网站汇总 PWA APP</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#50a0f0">
+<script src="https://unpkg.com/lucide/dist/lucide.min.js"></script>
+<style>
+:root {
+  --primary-color: hsl(200,60%,80%);
+  --card-bg:#fff;
+  --text-color:#333;
+}
+/* 基础样式 */
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:Arial,sans-serif;
+  background-color: var(--primary-color);
+  color: var(--text-color);
+  overflow-x:hidden;
+  touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+}
+header{
+  padding:1rem;
+  background: linear-gradient(90deg,#ff9a9e,#fad0c4,#a18cd1,#fbc2eb);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  position:sticky;
+  top:0;
+  z-index:10;
+  border-radius:0 0 12px 12px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.2);
+}
+#colorSlider{
+  width:70%;
+  border-radius:8px;
+  height:8px;
+  accent-color:#fff;
+}
+#addBtn{
+  padding:0.5rem;
+  background:#fff;
+  border:none;
+  border-radius:50%;
+  cursor:pointer;
+  box-shadow:0 2px 5px rgba(0,0,0,0.3);
+  display:flex; align-items:center; justify-content:center;
+}
+.container{
+  padding:1rem;
+  display:grid;
+  grid-template-columns: repeat(auto-fill,minmax(150px,1fr));
+  gap:1rem;
+  overflow-y:auto;
+  scroll-behavior:smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.card{
+  background: var(--card-bg);
+  padding:0.5rem;
+  border-radius:16px;
+  text-align:center;
+  cursor:pointer;
+  user-select:none;
+  position:relative;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  box-shadow:0 3px 12px rgba(0,0,0,0.15);
+}
+.card img{
+  width:100%;
+  border-radius:12px;
+  object-fit:cover;
+  height:100px;
+  transition:transform 0.25s ease;
+}
+.card.dragging{
+  opacity:0.75;
+  transform: scale(1.05) rotate(1deg);
+  box-shadow:0 8px 18px rgba(0,0,0,0.3);
+}
+.card .delete{
+  position:absolute;
+  top:5px;
+  right:5px;
+  background:red;color:#fff;
+  border:none;border-radius:50%;
+  width:28px;height:28px;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  z-index:5;font-weight:bold;
+}
+.sidebar{
+  position:fixed; top:0; left:-260px;
+  width:260px;height:100%;
+  background:#fff; z-index:15;
+  padding:1rem;
+  box-shadow:2px 0 12px rgba(0,0,0,0.25);
+  transition:0.3s; overflow-y:auto;
+  touch-action:none;
+}
+.sidebar.active{left:0;}
+.filter-btn{
+  position:fixed; top:1rem; left:1rem;
+  background:#fff; padding:0.5rem;
+  border-radius:50%;
+  z-index:16; cursor:pointer;
+  box-shadow:0 2px 5px rgba(0,0,0,0.3);
+  display:flex;align-items:center;justify-content:center;
+}
+label{display:block;margin:0.5rem 0;font-size:14px;}
+input, select, button{width:100%;padding:0.4rem;margin-bottom:0.5rem;border-radius:8px;border:1px solid #ccc;}
+button{cursor:pointer;transition:all 0.2s;}
+button:hover{background:#f0f0f0;}
+.modal{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;
+  z-index:20;transition:opacity 0.3s;
+}
+.modal.active{display:flex;opacity:1;}
+.modal-content{
+  background:#fff;padding:1rem;border-radius:16px;
+  width:90%;max-width:400px;
+  animation:popIn 0.3s ease;
+}
+@keyframes popIn{0%{transform:scale(0.8);opacity:0;}100%{transform:scale(1);opacity:1;}}
+.modal-content h3{margin-bottom:0.5rem;}
+</style>
+</head>
+<body>
+
+<header>
+  <input type="range" id="colorSlider" min="0" max="360" value="200">
+  <button id="addBtn" title="新增网站"><i data-lucide="plus"></i></button>
+</header>
+
+<div class="filter-btn" title="筛选"><i data-lucide="menu"></i></div>
+
+<div class="sidebar">
+  <h3>筛选</h3>
+  <label>类型:<select id="filterType"><option value="">全部</option></select></label>
+  <label>日期:<input type="date" id="filterDate"></label>
+  <button id="applyFilter">应用筛选</button>
+</div>
+
+<div class="container" id="siteContainer"></div>
+
+<div class="modal" id="addModal">
+  <div class="modal-content">
+    <h3>新增网站</h3>
+    <label>网站名称<input type="text" id="siteName"></label>
+    <label>网址<input type="url" id="siteUrl"></label>
+    <label>类型<input type="text" id="siteType"></label>
+    <label>图片/GIF URL<input type="url" id="siteImg"></label>
+    <button id="saveSite">保存</button>
+    <button id="cancelSite">取消</button>
+  </div>
+</div>
+
+<script>
+lucide.replace();
+
+let sites = JSON.parse(localStorage.getItem('sites')||'[]');
+if(sites.length===0){
+    sites=[
+        {name:"示例网站1", url:"https://example.com", type:"工具", date:"2025-09-27", img:"https://via.placeholder.com/150"},
+        {name:"示例网站2", url:"https://example2.com", type:"娱乐", date:"2025-09-26", img:"https://via.placeholder.com/150/ff9a9e"}
+    ];
+}
+
+const container = document.getElementById('siteContainer');
+const filterType = document.getElementById('filterType');
+
+function saveSites(){ localStorage.setItem('sites',JSON.stringify(sites)); }
+
+function updateFilterType() {
+    filterType.innerHTML = '<option value="">全部</option>';
+    [...new Set(sites.map(s=>s.type))].forEach(t=>{
+        const opt = document.createElement('option'); opt.value=t; opt.textContent=t;
+        filterType.appendChild(opt);
+    });
+}
+
+function renderSites(filter={}) {
+    container.innerHTML = '';
+    sites.filter(s=>{
+        return (!filter.type || s.type===filter.type) &&
+               (!filter.date || s.date===filter.date);
+    }).forEach((site,index)=>{
+        const card = document.createElement('div');
+        card.className='card';
+        card.innerHTML=`<button class="delete" title="删除"><i data-lucide="trash-2"></i></button>
+        <img src="${site.img}" alt="${site.name}"><h4>${site.name}</h4>`;
+        card.onclick = e=>{
+            if(!e.target.closest('.delete')) window.open(site.url,'_blank');
+        };
+        card.querySelector('.delete').onclick = e=>{
+            e.stopPropagation();
+            sites.splice(index,1);
+            saveSites();
+            renderSites();
+        };
+
+        let longPressTimer = null;
+        card.addEventListener('touchstart', e=>{
+            longPressTimer = setTimeout(()=>{ card.classList.add('dragging'); },300);
+        });
+        card.addEventListener('touchmove', e=>{
+            if(card.classList.contains('dragging')){
+                e.preventDefault();
+                const touchY = e.touches[0].clientY;
+                const afterElement = getDragAfterElement(container,touchY);
+                if(afterElement==null) container.appendChild(card);
+                else container.insertBefore(card,afterElement);
+            }
+        },{passive:false});
+        card.addEventListener('touchend', e=>{
+            clearTimeout(longPressTimer);
+            card.classList.remove('dragging');
+            saveOrder();
+        });
+
+        card.draggable = true;
+        card.addEventListener('dragstart',()=>card.classList.add('dragging'));
+        card.addEventListener('dragend',()=>{card.classList.remove('dragging'); saveOrder();});
+
+        container.appendChild(card);
+    });
+    lucide.replace();
+    updateFilterType();
+}
+
+function getDragAfterElement(container,y){
+    const draggableElements = [...container.querySelectorAll('.card:not(.dragging)')];
+    return draggableElements.reduce((closest,child)=>{
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height/2;
+        if(offset<0 && offset>closest.offset) return {offset:offset,element:child};
+        return closest;
+    },{offset:Number.NEGATIVE_INFINITY}).element;
+}
+
+function saveOrder(){
+    const cards = [...container.querySelectorAll('.card')];
+    sites = cards.map(card=>{
+        const name = card.querySelector('h4').textContent;
+        return sites.find(s=>s.name===name);
+    });
+    saveSites();
+}
+
+const colorSlider = document.getElementById('colorSlider');
+colorSlider.value = localStorage.getItem('themeColor')||200;
+document.documentElement.style.setProperty('--primary-color',`hsl(${colorSlider.value},60%,80%)`);
+colorSlider.addEventListener('input', e=>{
+    const val = e.target.value;
+    document.documentElement.style.setProperty('--primary-color',`hsl(${val},60%,80%)`);
+    localStorage.setItem('themeColor',val);
+});
+
+const sidebar = document.querySelector('.sidebar');
+const filterBtn = document.querySelector('.filter-btn');
+filterBtn.onclick = ()=>sidebar.classList.toggle('active');
+document.getElementById('applyFilter').onclick = ()=>{
+    const type = document.getElementById('filterType').value;
+    const date = document.getElementById('filterDate').value;
+    renderSites({type,date});
+};
+
+const addModal = document.getElementById('addModal');
+document.getElementById('addBtn').onclick = ()=>addModal.classList.add('active');
+document.getElementById('cancelSite').onclick = ()=>addModal.classList.remove('active');
+document.getElementById('saveSite').onclick = ()=>{
+    const name=document.getElementById('siteName').value;
+    const url=document.getElementById('siteUrl').value;
+    const type=document.getElementById('siteType').value||"未分类";
+    const img=document.getElementById('siteImg').value||"https://via.placeholder.com/150";
+    const date=new Date().toISOString().split('T')[0];
+    if(name&&url){
+        sites.push({name,url,type,date,img});
+        saveSites();
+        renderSites();
+        addModal.classList.remove('active');
+        document.getElementById('siteName').value='';
+        document.getElementById('siteUrl').value='';
+        document.getElementById('siteType').value='';
+        document.getElementById('siteImg').value='';
+    }else alert('名称和网址不能为空');
+};
+
+renderSites();
+
+// PWA service worker 注册
+if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').then(()=>console.log('SW registered'));
+}
+</script>
+</body>
+</html>
